@@ -739,6 +739,7 @@ std::vector<ExprHandle> TensorExprKernel::inferSizesForValue(
     case aten::lgamma:
     case aten::type_as:
     case aten::masked_fill:
+    case aten::sign:
       return sizesForValue(v->node()->input(0));
 
     case aten::sub:
@@ -2092,6 +2093,28 @@ Tensor tensorexpr::computeOperandValue(
             return tensorexpr::abs(promoteHalfToFloat(a));
           },
           kIntegralTypes | kFloatingPointTypes | kBoolType);
+    } break;
+
+    case aten::sign: {
+      return computeOneOperand(
+          "aten_sign",
+          inputs,
+          outputShape,
+          outputType,
+          [](const ExprHandle& a) {
+            auto inp = promoteIntegerToDefaultType(a);
+            auto v1 = CompareSelect::make(
+                inp,
+                ExprHandle(0.0f),
+                ExprHandle(-1.0f),
+                ExprHandle(1.0f),
+                kLT);
+            auto v2 = CompareSelect::make(
+                inp, ExprHandle(0.0f), ExprHandle(0.0f), v1, kEQ);
+            auto v3 = CompareSelect::make(
+                isnan(inp), ExprHandle(1), ExprHandle(0.0f), v2, kEQ);
+            return v3;
+          });
     } break;
 
     case aten::ceil: {
